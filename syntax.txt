@@ -1,0 +1,372 @@
+Syntax description for 'gbAsm.pl': version 0.01
+By Oyd11.
+
+This file tries to describe the syntax for this specific assembler,
+rather than give an opcode overview for the processor, which is available
+elsewhere in lots of nice places probably.
+Notably useful is 'Otaku No GameBoy' CribSheet which should be found in
+http:/www.otakunozoku.com/gameboy.html
+The index to goto for GB dev is:
+http://devrs.com/gb/ - Which is Jeff Frohwein's page.
+I don't have a set page with everything, but one day I will. Just google
+or altavista for 'oyd11' and you should find something.
+
+Syntax is pretty raw and straight forward.
+For now output is raw binary, ie. no nice obj formats for linkers.
+Oh, the assembler is case-iNsEnCiTiVe, ei, everything is just converted
+to uppercase before processing. commas (,) are regarded same as blank
+spaces, so 'ld a,(de)' is the same as 'ld a (de)'
+
+Number format:
+ * hex: - prefixed with either '$' or '0x'
+   Examples: 0xDEAD $0C001 0x06eC $40Cb
+ * decimal - raw digits, no prefix. Mind that '0' prefix will give octal!
+   Examples: 73373 303 6357 436
+ * octal: prefixed with 0, digits 0-7
+   Examples: 010 0156
+ * binary: Not supported :(
+
+Address indirection (indexing):
+For now address indirection is supported only with round parenthesis,
+stuck to the address
+   Examples:
+   ld a,(de)
+   ld ($2233),a
+   xor (hl)
+
+This is a very raw assembler, ie, there's no 'optimizations' by design,
+the opcodes you enter are the opcodes emitted. I find 'optimizing' assemblers
+just get in the way when for example trying to do self modifying code or
+similar things. And if you're interested in optimizations of any sort,
+you should be familiar with the opcodes yourself anyway. In summery,
+we assume you know what you're doing.
+
+Assembler mnemonics: (sorted (almost) alphabetically)
+
+8bit registers are:
+b,c,d,e,(hl),a - remember the index (hl) is just addressed as an 8 operand
+for all 8bit opcodes to use
+
+16bit registers are:
+bc,de,hl,sp
+
+index registers are:
+(bc),(de),(hl-),(hl+) ; (hl+) is alias as (hli), (hl-) as (hld)
+
+pop registers are:
+bc, de, hl, af
+
+condition codes:
+z,nz,c,nc
+which are respectingly abriviations for Zero,NotZero,Carry,NoCarry
+
+Where no target is specified, the accumulator 'a' is the target,
+and no target is accepted. Ie the assembler accepts 'xor b', but
+rejects 'xor a,b'
+
+adc <8bit> - add with carry
+8bit immediate, or 8bit register.
+ex:
+	adc 8
+	adc (hl)
+
+add <n> - add to accumulator
+n - 8bit immediate, or 8bit register.
+ex:
+	add c
+	add $ff
+
+add hl,<16bitreg> - add 16bitreg to hl
+ex:
+	add hl,de
+
+add sp,<8bit> - add immediate 8bit val to stack pointer
+8bit immediate only.
+ex:
+	add sp,-20
+
+and <8bit>  - bitwise and with 'a'
+8bit immediate or 8bit reg
+ex:
+	and $80
+	and c
+
+bit <n>,<8bit>  - test if nth bit is set. Zero flag will be 0 if bit is set.
+n = 0..7 immediate, 8bit register
+ex:
+	bit 3,c
+
+call <16bitAddr> - push address of next instruction, jump to address
+immediate 16bit address.
+ex:
+	call $1C00
+
+call <cc>,<16bitAddr> - call if cc condition is true, else nop.
+immediate 16bit address.
+ex:
+	call nz,0x2233
+	call c,$4488
+
+ccf - Complement Carry Flag
+no operands
+ex:
+	ccf
+
+cp <8bit> - compare a with <8bit>, this is a 'sub' w/o storing the result
+8bit imm, or reg
+ex:
+	cp (hl)
+	cp 84
+
+daa - Decimal Adjust After Add - for BCD calculations
+no operands
+ex:
+	daa
+
+dec <reg> - decrement register
+reg is either 8bit or 16bit
+	dec b
+	dec (hl) ; 8bit inc/dec affects the ZERO flag
+	dec hl  ; 16bit inc/dec does not affect flags!
+	dec de
+
+di - Disable Interrupts
+ex:
+	di
+ei - Disable Interrupts
+ex:
+	ei
+nop - No Operation.
+ex:
+	nop
+halt - halt the CPU and wait for interrupts.
+ex:
+	halt ; we emit just 'halt' no surrounding nops or anything
+
+inc <reg>- increment register
+reg is either 8bit or 16bit
+ex:
+	inc (hl) ; 8bit inc/dec affects the ZERO flag
+	dec hl  ; 16bit inc/dec does not affect flags!
+
+jp hl - jump to hl, load program counter with value in hl
+ex:
+	jp hl
+Note: the zilog syntax for this opcode, and most other assemblers, use
+the syntax 'jp (hl)' or 'jp [hl]', which (misleadingly) suggests an
+indirection. the opcode does roughly 'ld pc,hl'
+to jump to the address stored in 'hl' you could (for example)
+	ld a,(hl+)
+	ld h,(hl)
+	ld l,a
+	jp hl   ; assuming address is stored little-endian
+the 'jp (hl)' syntax is _REGECTED_
+
+jp <addr> - jump to address (load PC from immediate)
+16bit immediate address
+ex:
+	jp 0x0BED
+
+jp <cc>,<addr> - jump if condition is true.
+cc is a condition code, addr is 16bit immediate
+ex:
+	jp z,0x2050
+	jp nc,0x04E6
+
+jr <offset> - relative jump, add signed offset to PC
+offset is 8bit immediate
+ex:
+Note: PC is auto inc'd by size of opcode,so this renders:
+	jr 0 ; this is a nop
+	jr -2 ; this is an infinite 'stay in place' loop
+
+jr <cc>,<offset> - relative conditional jump
+ex:
+	jr c,0x10
+	jr n,-10
+
+ld <op0> <op1> - various loads and stores
+NOTE: some forms of 'ld' where split into more specific mnemonics
+
+ld <reg8> <8val> - ld 8bit reg with 8bit value
+8val is either immediate or another 8bit reg
+ex:
+	ld b,$ff
+	ld a,b
+	ld b,c
+	ld (hl),d
+	ld c,(hl)
+
+ld <addr>,a
+ld a,<addr>  - load or store 'a'
+addr - is either immediate 16bit, or a index register
+ex:
+	ld ($1020),a
+	ld a,($3040)
+	ld (bc),a
+	ld a,(hl+)
+
+ld <16bitreg>,<16bitImm> - load 16bit register
+ex:
+	ld de,$0DE0
+	ld bc,0x0cb0
+	ld sp,$ff80
+
+ld <addr>,sp - store Stack Pointer at immediate address
+ex:
+	ld (0xc140) sp
+
+The 'more specific' LDs:
+
+ldhl sp <offset> - load hl with sp + signed 8bit offset
+offset is 8bit
+ex:
+	ldhl sp -8
+
+ldsp hl - load Stack Pointer with hl
+ex:
+	ldsp hl
+
+ldio <offset>,a
+ldio a,<offset> - store or load 'a' in address $ff??
+offset is 8bit unsigned, which assumed a base in $ff00 the GameBoy
+I/O registers address
+offset is either immediate or in register 'c'
+ex:
+	ldio (c),a
+	ldio (0xff),a  ; store a at $ffff
+	ldio a,(c)
+	ldio a,(0xBF)
+
+
+or <8bit> - bitwise or 'a' with value
+8bit is either immediate or an 8bit reg
+ex:
+	or 0x80
+	or c
+	or (hl)
+
+pop <popReg> - load register from the stack, Incr SP twice.
+ex:
+	pop hl
+	pop de
+	pop bc
+	pop af
+
+push <popReg> - store register on the stack, Decr SP twice. stack grows down.
+ex:
+	push af
+	push bc
+	push de
+	push hl
+
+res <n>,<8bit>  - reset nth bit, ie. set it to Zero.
+n = 0..7 immediate, 8bit register
+ex:
+	res 2,a
+	res 1,(hl)
+
+ret - return from subroutine: ie: pop PC (this syntax isn't supported for now)
+ex:
+	ret
+
+ret cc - return if condition is true.
+ex:
+	ret nz
+	ret nc
+	ret c
+
+reti - return from interrupt, ie. ret + Enable Interrupts
+	reti
+
+rl <reg8> - rotate left (see diagrams in Otaku's cribsheet) this is THRU Carry
+ex:
+	rl a
+	rl b
+	rl c
+
+rla - rotate left 'a' (the r??a versions are a byte and cycle shorter)
+ex:
+	rla
+
+rlc - Rotate Left to Carry (to, not THRU)
+ex:
+	rlc b
+
+rlca - rotate left to carry a
+	rlca
+
+rr <reg8> - rotate right
+ex:
+	rr b
+	rr (hl)
+rra - rotate right a
+ex:
+	rra
+
+rrc <reg8> - rotate right to carry
+	rrc d
+
+rrca - rotate right to carry a
+ex:
+	rrca
+
+rst <n> - 'restart' call subroutine at $0 + n
+n is immediate, and has to be from: $00,$08,$10,$18,$20,$28,$30,$38
+ex:
+	rst 0x08
+
+sbc <8bit> - Subtract with Carry
+8bit is either immediate or 8bit reg
+ex:
+	sbc c
+	sbc -10
+	sbc (hl)
+
+scf - set carry flag
+ex:
+	scf
+
+set <n>,<8bit>  - set nth bit, ie. set it On to One.
+n = 0..7 immediate, 8bit register
+ex:
+	set 4,a
+	set 0,(hl)
+
+sla <8reg> - Shift Left (LSB filled with 0s, MSB into carry)
+ex:
+	sla a
+	sla b
+	sla (hl)
+
+sra <8reg> - Shift Right Arithmetic - (MSB is retained, LSB -> Carry)
+	sra a
+	sra c
+
+srl - Shift Right (Logic?) - (MSB is filled with 0s, LSB -> carry)
+	srl a
+	srl (hl)
+
+stop - stop CPU
+	stop
+
+sub
+sub <8bit> - Subtract
+8bit is either immediate or 8bit reg
+ex:
+	sub c
+	sub (hl)
+	sub 20
+
+swap <8reg> - rotate register 4bits, effectivly swapping hi/low nibbles.
+ex:
+	swap a
+	swap (hl)
+
+xor <8bit> - bitwise xor a with <8bit>
+8bit is either immediate or 8bit reg
+	xor a
+	xor (hl)
+	xor $55
+
+---------- End of mnemonic list -----

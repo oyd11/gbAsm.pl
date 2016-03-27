@@ -1,0 +1,32 @@
+----------------------------------------------------------------------
+ * gbAsm.pl - GameBoy assembler in perl:
+----------------------------------------------------------------------
+
+The idea is that we define a function foreach opcode that emits the opcode,
+kinda 'forth' style.
+
+ Suggestion: Before attempting something like this in perl, make sure
+you are fluent with def'ing undef'ing returning undef's chomp'ing
+scalar context's, my "yeah, let's just 'eval'" attitude, burn'd me abit here.
+A nice tip I found is that if you wanna get a closure into the symbol-table,
+rather than a variable, you can do it with typeglobs, probably trivial to
+'real' perl blokes (and naturally to all perl-cheeks ;)
+
+sub define0operand {
+	my ($opcode) = @_ ; # get parameter
+	return sub {
+		push @out , $opcode ;
+	}
+}
+
+$RETI = define0operand 0xd9;
+&$RETI; # now we call RETI like this, since it's a reference
+*RETI = def0operand  0xd9 ;
+# now RETI is in the symbol table, like any other func, we can call:
+RETI # just call RETI to emit it's opcode
+
+Note that my source here is needlessly dirty, and uses alot of cut n paste
+code dups, which could be saved with function factorisation.
+Namely all kinds of tr/a-z/A-Z/ mess...
+
+----------------------------------------------------------------------
